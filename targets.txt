@@ -1,0 +1,12 @@
+# Network monitor targets — one per line.
+# Lines starting with # are ignored. Empty lines are skipped.
+# Supports both domain names and IP addresses.
+www.google.com
+www.apple.com
+remote.gobgp.com
+meeting.tencent.com
+workspace.google.com
+data.bigo.sg
+manage-oss.bigo.sg
+8.8.8.8
+www.baidu.com

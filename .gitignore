@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+
+# Generated files
+logs/
+*.tar.gz
+
+# Claude Code local settings
+.claude/settings.local.json

@@ -96,29 +96,33 @@ function Parse-PingOutput {
         return @{ Tx = 0; Rx = 0; Loss = 100; Min = $null; Avg = $null; Max = $null; StdDev = $null; Jitter = $null }
     }
 
-    # Extract individual RTT values from lines like "time=15ms" or "time<1ms"
+    # Extract individual RTT values (English: "time=15ms" / "time<1ms", Chinese: "时间=15ms" / "时间<1ms")
     $rttTimes = [double[]]@()
     $lines = $raw -split "`r`n|`n"
     foreach ($l in $lines) {
-        if ($l -match 'time[=<]\s*(\d+)\s*ms') {
+        if ($l -match '(?:time|时间)[=<>]\s*(\d+)\s*ms') {
             $rttTimes += [double]$Matches[1]
-        } elseif ($l -match 'time<1ms') {
+        } elseif ($l -match '(?:time|时间)\s*<\s*1\s*ms') {
             $rttTimes += 0.5
         }
     }
 
-    # Parse summary statistics
-    # "Packets: Sent = 100, Received = 100, Lost = 0 (0% loss),"
+    # Parse summary statistics (English and Chinese locale support)
+    # English: "Packets: Sent = 100, Received = 100, Lost = 0 (0% loss),"
+    # Chinese: "数据包: 已发送 = 100，已接收 = 100，丢失 = 0 (0% 丢失)"
     $tx = 0; $rx = 0; $loss = 100.0
-    if ($raw -match 'Packets:\s*Sent\s*=\s*(\d+).*?Received\s*=\s*(\d+).*?Lost\s*=\s*(\d+)\s*\((\d+)%') {
+    if ($raw -match 'Packets:\s*Sent\s*=\s*(\d+).*?Received\s*=\s*(\d+).*?Lost\s*=\s*(\d+)\s*\((\d+)%' -or
+        $raw -match '数据包:\s*已发送\s*=\s*(\d+).*?已接收\s*=\s*(\d+).*?丢失\s*=\s*(\d+)\s*\((\d+)%') {
         $tx = [int]$Matches[1]
         $rx = [int]$Matches[2]
         $loss = [double]$Matches[4]
     }
 
-    # "Minimum = 13ms, Maximum = 408ms, Average = 22ms"
+    # English: "Minimum = 13ms, Maximum = 408ms, Average = 22ms"
+    # Chinese: "最短 = 13ms，最长 = 408ms，平均 = 22ms"
     $min = $null; $max = $null; $avg = $null
-    if ($raw -match 'Minimum\s*=\s*(\d+)\s*ms.*?Maximum\s*=\s*(\d+)\s*ms.*?Average\s*=\s*(\d+)\s*ms') {
+    if ($raw -match 'Minimum\s*=\s*(\d+)\s*ms.*?Maximum\s*=\s*(\d+)\s*ms.*?Average\s*=\s*(\d+)\s*ms' -or
+        $raw -match '最短\s*=\s*(\d+)\s*ms.*?最长\s*=\s*(\d+)\s*ms.*?平均\s*=\s*(\d+)\s*ms') {
         $min = [double]$Matches[1]
         $max = [double]$Matches[2]
         $avg = [double]$Matches[3]
@@ -245,7 +249,8 @@ if ($wifiAdapter) {
         Select-Object -First 1
     if ($ipConfig) {
         $IPAddr = $ipConfig.IPAddress
-        $Netmask = "0x$([Convert]::ToString([Convert]::ToInt64($ipConfig.PrefixLength), 16).PadLeft(8, '0'))"
+        $mask = [UInt32]::MaxValue -shl (32 - $ipConfig.PrefixLength)
+        $Netmask = "0x$($mask.ToString('x8'))"
     }
 
     # Get gateway
@@ -305,7 +310,7 @@ if ($Gateway -and $Gateway -ne "N/A") {
     $gwFile = Join-Path $TempDir "ping_gateway.out"
     $Jobs += Start-Job -Name "PingGateway" -ArgumentList $Gateway, $PingCount, $PingTimeoutMs, $gwFile -ScriptBlock {
         param($gw, $cnt, $timeout, $outFile)
-        & ping -n $cnt -w $timeout $gw 2>&1 | Out-File -FilePath $outFile -Encoding utf8
+        & cmd /c "chcp 437 > nul && ping -n $cnt -w $timeout $gw" 2>&1 | Out-File -FilePath $outFile -Encoding utf8
     }
     $PingGwLabel = "Gateway"
     $PingGwTarget = $Gateway
@@ -323,7 +328,7 @@ foreach ($target in $Targets) {
     $TargetPingFiles += @{ Target = $target; File = $outFile }
     $Jobs += Start-Job -Name "Ping_$safeName" -ArgumentList $target, $PingCount, $PingTimeoutMs, $outFile -ScriptBlock {
         param($t, $cnt, $timeout, $outFile)
-        & ping -n $cnt -w $timeout $t 2>&1 | Out-File -FilePath $outFile -Encoding utf8
+        & cmd /c "chcp 437 > nul && ping -n $cnt -w $timeout $t" 2>&1 | Out-File -FilePath $outFile -Encoding utf8
     }
 }
 
@@ -345,7 +350,7 @@ $Jobs += Start-Job -Name "PublicIP" -ArgumentList $publicIpFile -ScriptBlock {
     param($outFile)
     $ip = $null
     try {
-        $ip = (Invoke-WebRequest -Uri "https://ifconfig.me" -TimeoutSec 5 -UseBasicParsing).Content.Trim()
+        $ip = (Invoke-WebRequest -Uri "https://ifconfig.me/ip" -TimeoutSec 5 -UseBasicParsing).Content.Trim()
     } catch {}
     if (-not $ip) {
         try {

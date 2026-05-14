@@ -357,7 +357,7 @@ $Jobs += Start-Job -Name "PublicIP" -ArgumentList $publicIpFile -ScriptBlock {
             $ip = (Invoke-WebRequest -Uri "https://ipinfo.io/ip" -TimeoutSec 5 -UseBasicParsing).Content.Trim()
         } catch {}
     }
-    if ($ip) { $ip } else { "N/A" } | Out-File -FilePath $outFile -Encoding utf8
+    $(if ($ip) { $ip } else { "N/A" }) | Out-File -FilePath $outFile -Encoding utf8
 }
 
 # =====================================================================

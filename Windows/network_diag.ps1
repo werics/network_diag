@@ -87,13 +87,13 @@ function Parse-PingOutput {
     )
     if (-not (Test-Path $TempFile)) {
         Write-Log "ERROR: No ping output file for $TargetLabel"
-        return @{ Tx = 0; Rx = 0; Loss = 100; Min = $null; Avg = $null; Max = $null; StdDev = $null; Jitter = $null }
+        return @{ Tx = 0; Rx = 0; Loss = 100; Min = $null; Avg = $null; Max = $null; StdDev = 0; Jitter = 0 }
     }
 
     $raw = Get-Content $TempFile -Raw
     if (-not $raw) {
         Write-Log "ERROR: Empty ping output for $TargetLabel"
-        return @{ Tx = 0; Rx = 0; Loss = 100; Min = $null; Avg = $null; Max = $null; StdDev = $null; Jitter = $null }
+        return @{ Tx = 0; Rx = 0; Loss = 100; Min = $null; Avg = $null; Max = $null; StdDev = 0; Jitter = 0 }
     }
 
     # Extract individual RTT values (English: "time=15ms" / "time<1ms", Chinese: "时间=15ms" / "时间<1ms")
@@ -389,12 +389,12 @@ if (Test-Path $gwFile) {
     if ($skipContent -match 'SKIP:no_gateway') {
         Write-Log ""
         Write-Log "========== Ping Gateway: SKIPPED (no gateway) =========="
-        $GwResult = @{ Tx = 0; Rx = 0; Loss = 100; Min = $null; Avg = $null; Max = $null; StdDev = $null; Jitter = $null }
+        $GwResult = @{ Tx = 0; Rx = 0; Loss = 100; Min = $null; Avg = $null; Max = $null; StdDev = 0; Jitter = 0 }
     } else {
         $GwResult = Parse-PingOutput -TempFile $gwFile -TargetLabel "$Gateway (Gateway)"
     }
 } else {
-    $GwResult = @{ Tx = 0; Rx = 0; Loss = 100; Min = $null; Avg = $null; Max = $null; StdDev = $null; Jitter = $null }
+    $GwResult = @{ Tx = 0; Rx = 0; Loss = 100; Min = $null; Avg = $null; Max = $null; StdDev = 0; Jitter = 0 }
 }
 
 # Collect Target Pings
@@ -433,6 +433,10 @@ $Jobs | Remove-Job -Force 2>$null
 Write-Log ""
 Write-Log "========== Writing CSV Summary =========="
 
+# Use UTF-8 without BOM for cross-platform compatibility (PowerShell 5.1's
+# -Encoding UTF8 adds a BOM, which breaks Python's csv.DictReader)
+$Utf8NoBom = New-Object System.Text.UTF8Encoding $false
+
 # Build CSV header if file doesn't exist
 if (-not (Test-Path $SummaryCsv)) {
     $header = @(
@@ -442,7 +446,7 @@ if (-not (Test-Path $SummaryCsv)) {
         "gw_or_target_min", "gw_or_target_avg", "gw_or_target_max",
         "gw_or_target_stddev", "gw_or_target_jitter"
     ) -join ","
-    Add-Content -Path $SummaryCsv -Value $header -Encoding UTF8
+    [System.IO.File]::WriteAllText($SummaryCsv, $header, $Utf8NoBom)
 }
 
 # Common prefix fields
@@ -463,15 +467,15 @@ $csvPrefix = @(
     $PublicIP
 ) -join ","
 
-# Gateway row
-$gwCsvLine = "$csvPrefix,gateway,$($GwResult.Tx),$($GwResult.Rx),$($GwResult.Loss),$(Format-NumOrNA $GwResult.Min),$(Format-NumOrNA $GwResult.Avg),$(Format-NumOrNA $GwResult.Max),$(Format-NumOrNA $GwResult.StdDev),$($GwResult.Jitter)"
-Add-Content -Path $SummaryCsv -Value $gwCsvLine -Encoding UTF8
+# Gateway row (jitter wrapped with Format-NumOrNA to avoid empty field when $null)
+$gwCsvLine = "$csvPrefix,gateway,$($GwResult.Tx),$($GwResult.Rx),$($GwResult.Loss),$(Format-NumOrNA $GwResult.Min),$(Format-NumOrNA $GwResult.Avg),$(Format-NumOrNA $GwResult.Max),$(Format-NumOrNA $GwResult.StdDev),$(Format-NumOrNA $GwResult.Jitter)"
+[System.IO.File]::AppendAllText($SummaryCsv, $gwCsvLine + [Environment]::NewLine, $Utf8NoBom)
 
 # Target rows
 foreach ($target in $Targets) {
     $r = $TargetResults[$target]
-    $targetCsvLine = "$csvPrefix,$target,$($r.Tx),$($r.Rx),$($r.Loss),$(Format-NumOrNA $r.Min),$(Format-NumOrNA $r.Avg),$(Format-NumOrNA $r.Max),$(Format-NumOrNA $r.StdDev),$($r.Jitter)"
-    Add-Content -Path $SummaryCsv -Value $targetCsvLine -Encoding UTF8
+    $targetCsvLine = "$csvPrefix,$target,$($r.Tx),$($r.Rx),$($r.Loss),$(Format-NumOrNA $r.Min),$(Format-NumOrNA $r.Avg),$(Format-NumOrNA $r.Max),$(Format-NumOrNA $r.StdDev),$(Format-NumOrNA $r.Jitter)"
+    [System.IO.File]::AppendAllText($SummaryCsv, $targetCsvLine + [Environment]::NewLine, $Utf8NoBom)
 }
 
 Write-Log "CSV summary written to: $SummaryCsv"

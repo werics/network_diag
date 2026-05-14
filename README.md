@@ -2,7 +2,7 @@
 
 Comprehensive network performance monitoring toolkit. Collects Wi-Fi metrics, ping statistics (latency, jitter, loss), traceroute data, and public IP — then visualizes everything in an interactive HTML dashboard.
 
-> **Current**: macOS | **Planned**: Windows
+> **macOS** | **Windows**
 
 ## Features
 
@@ -26,7 +26,13 @@ Comprehensive network performance monitoring toolkit. Collects Wi-Fi metrics, pi
 │   └── logs/                # Output directory (generated)
 │       ├── summary.csv      # Consolidated metrics
 │       └── dashboard.html   # Interactive dashboard
-├── Windows/                 # Windows version (planned)
+├── Windows/                 # Windows version
+│   ├── network_diag.ps1     # Main diagnostics script (PowerShell)
+│   ├── run_scheduled.ps1    # 5-minute scheduler
+│   ├── targets.txt          # Monitor targets (domains or IPs)
+│   └── logs/                # Output directory (generated)
+│       ├── summary.csv      # Consolidated metrics
+│       └── dashboard.html   # Interactive dashboard
 └── README.md
 ```
 
@@ -38,15 +44,23 @@ Comprehensive network performance monitoring toolkit. Collects Wi-Fi metrics, pi
 | `MacOS/run_scheduled.sh` | Scheduler. Runs `network_diag.sh` every 5 minutes. Press Ctrl-C to stop. |
 | `MacOS/wifi_info.swift` | Swift helper using CoreWLAN to get unredacted Wi-Fi info on macOS. |
 | `MacOS/generate_dashboard.py` | Python script that reads `logs/summary.csv` and generates `logs/dashboard.html`. |
-| `MacOS/targets.txt` | Monitor targets, one per line. Supports domains and IPs. `#` for comments. |
+| `MacOS/targets.txt` | Monitor targets for macOS, one per line. Supports domains and IPs. |
+| `Windows/network_diag.ps1` | Main diagnostics script for Windows (PowerShell). |
+| `Windows/run_scheduled.ps1` | Scheduler for Windows. Runs `network_diag.ps1` every 5 minutes. |
+| `Windows/targets.txt` | Monitor targets for Windows, one per line. Supports domains and IPs. |
 
 ## Requirements
 
-- **macOS** with Swift (built-in) and `bc` (built-in)
-- **Python 3** (for `generate_dashboard.py`)
-- For Wi-Fi SSID/BSSID: grant **Location Services** permission to Terminal (System Settings → Privacy & Security → Location Services)
+**macOS:**
+- macOS with Swift (built-in) and `bc` (built-in)
+- Python 3 (for `generate_dashboard.py`)
+- For Wi-Fi SSID/BSSID: grant **Location Services** permission to Terminal
 
-## Quick Start
+**Windows:**
+- Windows 10/11 with PowerShell 5.1+
+- Python 3 (for `generate_dashboard.py` — copy from `MacOS/` folder)
+
+## Quick Start (macOS)
 
 ### 1. Configure targets
 
@@ -65,15 +79,11 @@ www.apple.com
 cd MacOS && ./network_diag.sh
 ```
 
-Output written to `MacOS/logs/YYYYMMDD/HHMMSS.txt` and `MacOS/logs/summary.csv`.
-
 ### 3. Run on schedule
 
 ```bash
 cd MacOS && ./run_scheduled.sh
 ```
-
-Runs immediately, then every 5 minutes at :00, :05, :10... Press Ctrl-C to stop.
 
 ### 4. View dashboard
 
@@ -82,7 +92,40 @@ cd MacOS && python3 generate_dashboard.py
 cd MacOS/logs && python3 -m http.server 8080
 ```
 
-Open `http://localhost:8080/dashboard.html` in a browser. The dashboard auto-refreshes every 5 minutes as new data arrives.
+Open `http://localhost:8080/dashboard.html`.
+
+## Quick Start (Windows)
+
+### 1. Configure targets
+
+Edit `Windows/targets.txt` — same format as macOS.
+
+### 2. Run once
+
+```powershell
+cd Windows
+powershell -ExecutionPolicy Bypass -File .\network_diag.ps1
+```
+
+Output written to `Windows\logs\YYYYMMDD\HHMMSS.txt` and `Windows\logs\summary.csv`.
+
+### 3. Run on schedule
+
+```powershell
+cd Windows
+powershell -ExecutionPolicy Bypass -File .\run_scheduled.ps1
+```
+
+### 4. View dashboard
+
+```powershell
+cd Windows
+copy ..\MacOS\generate_dashboard.py .
+python generate_dashboard.py
+cd logs && python -m http.server 8080
+```
+
+Open `http://localhost:8080/dashboard.html`. The dashboard works with both macOS and Windows CSV data (identical format).
 
 ## Dashboard
 

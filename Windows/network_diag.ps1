@@ -235,10 +235,14 @@ $Netmask = "N/A"
 $Gateway = "N/A"
 $MacAddr = "N/A"
 
-# Detect Wi-Fi adapter
-$wifiAdapter = Get-NetAdapter -Physical -ErrorAction SilentlyContinue |
-    Where-Object { $_.MediaType -eq 'Native 802.11' -or $_.Name -like '*Wi-Fi*' -or $_.Name -like '*Wireless*' } |
-    Select-Object -First 1
+# Detect Wi-Fi adapter with timeout (Get-NetAdapter can hang via WMI on some systems)
+$adapterJob = Start-Job -ScriptBlock {
+    Get-NetAdapter -Physical -ErrorAction SilentlyContinue |
+        Where-Object { $_.MediaType -eq 'Native 802.11' -or $_.Name -like '*Wi-Fi*' -or $_.Name -like '*Wireless*' } |
+        Select-Object -First 1
+}
+$wifiAdapter = $adapterJob | Wait-Job -Timeout 10 | Receive-Job
+Remove-Job -Force $adapterJob -ErrorAction SilentlyContinue
 
 if ($wifiAdapter) {
     $WifiIface = $wifiAdapter.Name
